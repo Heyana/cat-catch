@@ -322,11 +322,11 @@ $("#importOptionsFile").change(function () {
         }
         const keys = Object.keys(G.OptionLists);
         for (let item in G.OptionLists) {
-            if (keys.includes(item) && importData[item]) {
+            if (keys.includes(item) && importData[item] !== undefined) {
                 chrome.storage.sync.set({ [item]: importData[item] });
             }
         }
-        alert("导入完成");
+        alert(i18n.alertimport);
         location.reload();
     }
     const file = $("#importOptionsFile").prop('files')[0];
