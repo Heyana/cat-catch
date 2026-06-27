@@ -66,6 +66,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         });
         return;
     }
+    if (msg.type === 'offscreen-close') {
+        chrome.offscreen.closeDocument();
+        offscreenReady = false;
+        return;
+    }
     // 不拦截其他消息
     return;
 });

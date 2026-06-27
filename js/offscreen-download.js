@@ -178,7 +178,7 @@ function scheduleClose() {
     if (activeDownloads > 0) return;
     if (closeTimer) clearTimeout(closeTimer);
     closeTimer = setTimeout(() => {
-        chrome.offscreen.closeDocument();
+        chrome.runtime.sendMessage({ type: 'offscreen-close' }).catch(() => { });
     }, 3000);
 }
 
