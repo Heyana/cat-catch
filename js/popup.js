@@ -1040,7 +1040,6 @@ function openDownloaderTab(data, extra = {}) {
             url: `/downloader.html?${new URLSearchParams({
                 requestId: data.map(item => item.requestId).join(","),
                 JSON: JSON.stringify(safeData[0] || {}),
-                autoClose: 1,
                 ...extra
             })}`,
             index: tab.index + 1,

@@ -224,13 +224,11 @@ function start() {
     down.on('allCompleted', function (buffer) {
         $("#stopDownload").hide();
 
-        // 下载完成 + autoClose 勾选 → 自动关闭（不限于流式下载）
-        if ($("#autoClose").prop("checked") && !_ffmpeg) {
-            setTimeout(() => { closeTab(); }, Math.ceil(Math.random() * 999));
-        }
-        // ffmpeg 模式加兜底定时器：15 秒后强制关闭
-        if ($("#autoClose").prop("checked") && _ffmpeg) {
-            setTimeout(() => { closeTab(); }, 15000);
+        // 检查 down.fragments 是否都为边下边存 检查自动关闭
+        if (down.fragments.every(item => item.fileStream) && $("#autoClose").prop("checked")) {
+            setTimeout(() => {
+                closeTab();
+            }, Math.ceil(Math.random() * 999));
         }
     });
 

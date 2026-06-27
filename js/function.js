@@ -568,13 +568,6 @@ function closeTab(tabId = 0) {
  */
 function openParser(data, options = {}) {
     chrome.tabs.get(G.tabId, function (tab) {
-        const finalOptions = { ...options };
-
-        // 自动下载模式：默认后台打开 + 下载完自动关闭
-        if (options.autoDown) {
-            if (finalOptions.autoClose === undefined) finalOptions.autoClose = true;
-        }
-
         const url = `/${data.parsing ? data.parsing : "m3u8"}.html?${new URLSearchParams({
             url: data.url,
             title: data.title,
@@ -582,13 +575,13 @@ function openParser(data, options = {}) {
             tabid: data.tabId == -1 ? G.tabId : data.tabId,
             initiator: data.initiator,
             requestHeaders: data.requestHeaders ? JSON.stringify(data.requestHeaders) : undefined,
-            ...Object.fromEntries(Object.entries(finalOptions).map(([key, value]) => [key, typeof value === 'boolean' ? (value ? 1 : 0) : value])),
+            ...Object.fromEntries(Object.entries(options).map(([key, value]) => [key, typeof value === 'boolean' ? (value ? 1 : 0) : value])),
         })}`
 
         chrome.tabs.create({
             url: url,
             index: tab.index + 1,
-            active: G.isMobile, // autoDown 一律后台，不抢焦点
+            active: G.isMobile,
             openerTabId: tab.id
         });
     });
