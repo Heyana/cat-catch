@@ -91,20 +91,19 @@ async function downloadM3U8(data) {
     });
 
     downloader.on('allCompleted', async (buffers) => {
-        // 合并 TS 分段为单一 MP4
+        // 合并 TS 分段为单一 MP4 → 通过 background 下载
         const merged = mergeSegments(buffers);
         const blob = new Blob([merged], { type: 'video/mp4' });
         const blobUrl = URL.createObjectURL(blob);
 
-        chrome.downloads.download({
-            url: blobUrl,
+        saveViaBackground({
+            blobUrl,
             filename: data.filename || 'download.mp4',
             saveAs: data.saveAs || false
-        }, (downloadId) => {
-            URL.revokeObjectURL(blobUrl);
-            activeDownloads = 0;
-            scheduleClose();
         });
+        URL.revokeObjectURL(blobUrl);
+        activeDownloads = 0;
+        scheduleClose();
     });
 
     downloader.on('downloadError', (fragment, error) => {
@@ -137,13 +136,12 @@ async function downloadDirect(items) {
         const blob = await response.blob();
         const blobUrl = URL.createObjectURL(blob);
 
-        chrome.downloads.download({
-            url: blobUrl,
+        saveViaBackground({
+            blobUrl,
             filename: item.downFileName || item.filename || undefined,
             saveAs: item.saveAs || false
-        }, (downloadId) => {
-            URL.revokeObjectURL(blobUrl);
         });
+        URL.revokeObjectURL(blobUrl);
     }
 
     activeDownloads = 0;
@@ -162,6 +160,16 @@ function mergeSegments(buffers) {
         }
     }
     return merged.buffer;
+}
+
+// 通过 background.js 下载（offscreen 上下文中 chrome.downloads 不可用）
+function saveViaBackground({ blobUrl, filename, saveAs }) {
+    chrome.runtime.sendMessage({
+        type: 'offscreen-save',
+        blobUrl,
+        filename,
+        saveAs
+    }).catch(() => { });
 }
 
 // 延迟关闭 offscreen 文档（等 chrome.downloads 回调完成）

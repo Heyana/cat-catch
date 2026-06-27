@@ -58,6 +58,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         console.warn('Offscreen download error:', msg.url, msg.status);
         return;
     }
+    if (msg.type === 'offscreen-save') {
+        chrome.downloads.download({
+            url: msg.blobUrl,
+            filename: msg.filename,
+            saveAs: msg.saveAs || false
+        });
+        return;
+    }
     // 不拦截其他消息
     return;
 });
