@@ -5,6 +5,39 @@ importScripts("/js/function.js", "/js/templates.js", "/js/init.js");
 let offscreenReady = false;
 const offscreenQueue = [];
 
+// 直接在 background SW 中执行下载（有完整跨域权限，无需 offscreen）
+async function downloadDirectInBackground(items) {
+    if (!Array.isArray(items)) items = [items];
+    for (const item of items) {
+        try {
+            const headers = item.requestHeaders || {};
+            const fetchHeaders = new Headers(headers);
+            if (headers.referer) fetchHeaders.set('Referer', headers.referer);
+            if (headers.Referer && !headers.referer) fetchHeaders.set('Referer', headers.Referer);
+
+            const response = await fetch(item.url, {
+                headers: fetchHeaders,
+                cache: 'no-cache'
+            });
+
+            if (!response.ok) {
+                console.warn('Background fetch failed:', item.url, response.status);
+                continue;
+            }
+
+            const blob = await response.blob();
+            const blobUrl = URL.createObjectURL(blob);
+            chrome.downloads.download({
+                url: blobUrl,
+                filename: item.downFileName || item.filename || undefined,
+                saveAs: item.saveAs || false
+            });
+        } catch (e) {
+            console.warn('Background download error:', item.url, e.message);
+        }
+    }
+}
+
 async function ensureOffscreen() {
     const hasDoc = await chrome.offscreen.hasDocument();
     if (hasDoc) {
@@ -618,13 +651,19 @@ chrome.runtime.onMessage.addListener(function (Message, sender, sendResponse) {
         sendResponse("ok");
         return true;
     }
-    // Offscreen 下载引擎 — 替代 downloader.html 页面跳转
+    // Offscreen 下载引擎路由
     if (Message.Message == "offscreen-download") {
-        sendToOffscreen({
-            action: "offscreen-download",
-            type: Message.type,
-            data: Message.data
-        });
+        if (Message.type === "direct") {
+            // 直接下载：background SW 直接 fetch（有完整跨域权限）
+            downloadDirectInBackground(Message.data);
+        } else {
+            // M3U8：走 offscreen（需要 HLS.js DOM 解析）
+            sendToOffscreen({
+                action: "offscreen-download",
+                type: Message.type,
+                data: Message.data
+            });
+        }
         sendResponse({ status: "ok" });
         return true;
     }
@@ -861,11 +900,7 @@ chrome.downloads.onChanged.addListener(function (item) {
     const errorList = ["SERVER_BAD_CONTENT", "SERVER_UNAUTHORIZED", "SERVER_FORBIDDEN", "SERVER_UNREACHABLE", "SERVER_CROSS_ORIGIN_REDIRECT", "SERVER_FAILED", "NETWORK_FAILED"];
     if (item.error && errorList.includes(item.error.current) && G.downDataImageSave) {
         const data = { requestHeaders: { referer: G.downDataImageSave.pageUrl }, requestId: G.tabId, url: G.downDataImageSave.srcUrl };
-        sendToOffscreen({
-            action: "offscreen-download",
-            type: "direct",
-            data: [data]
-        });
+        downloadDirectInBackground([data]);
         delete G.downDataImageSave;
     }
 });
