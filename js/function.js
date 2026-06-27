@@ -178,8 +178,11 @@ function awaitG(callback, sec = 0) {
  */
 function getUrlFileName(url) {
     let pathname = new URL(url).pathname;
+    pathname = pathname.replace(/\/$/, "");  // 去掉尾部斜杠
     let filename = pathname.split("/").pop();
-    return filename ? filename : "NULL";
+    if (filename && filename.includes(".")) return filename;
+    // 无有效文件名，用时间戳兜底
+    return filename || "download_" + Date.now();
 }
 
 /**

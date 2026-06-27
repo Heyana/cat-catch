@@ -1027,14 +1027,24 @@ function catDownload(data, extra = {}) {
 
 function openDownloaderTab(data, extra = {}) {
     chrome.tabs.get(G.tabId, function (tab) {
+        // 将完整数据（含 downFileName）序列化通过 JSON 参数传给下载器
+        const safeData = data.map(item => ({
+            url: item.url,
+            title: item.title,
+            downFileName: item.downFileName,
+            requestId: item.requestId,
+            requestHeaders: item.requestHeaders || {},
+            _size: item._size
+        }));
         chrome.tabs.create({
             url: `/downloader.html?${new URLSearchParams({
                 requestId: data.map(item => item.requestId).join(","),
-                autoClose: 1,   // 合并完成后自动关闭，用户无感知
+                JSON: JSON.stringify(safeData[0] || {}),
+                autoClose: 1,
                 ...extra
             })}`,
             index: tab.index + 1,
-            active: false       // 后台打开，不抢焦点
+            active: false
         });
     });
 }

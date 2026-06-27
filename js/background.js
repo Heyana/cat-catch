@@ -331,7 +331,7 @@ function findMedia(data, isRegex = false, filter = false, timer = false) {
             info.initiator = info.requestHeaders?.referer ?? webInfo?.url;
         }
         // 装载页面信息
-        info.title = webInfo?.title ?? "NULL";
+        info.title = webInfo?.title || "";
         info.favIconUrl = webInfo?.favIconUrl;
         info.webUrl = webInfo?.url;
         // 屏蔽资源
