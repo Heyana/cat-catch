@@ -5,36 +5,15 @@ importScripts("/js/function.js", "/js/templates.js", "/js/init.js");
 let offscreenReady = false;
 const offscreenQueue = [];
 
-// 直接在 background SW 中执行下载（有完整跨域权限，无需 offscreen）
+// 直接在 background SW 中触发下载（SW 不能 URL.createObjectURL，用 chrome.downloads 原生下载）
 async function downloadDirectInBackground(items) {
     if (!Array.isArray(items)) items = [items];
     for (const item of items) {
-        try {
-            const headers = item.requestHeaders || {};
-            const fetchHeaders = new Headers(headers);
-            if (headers.referer) fetchHeaders.set('Referer', headers.referer);
-            if (headers.Referer && !headers.referer) fetchHeaders.set('Referer', headers.Referer);
-
-            const response = await fetch(item.url, {
-                headers: fetchHeaders,
-                cache: 'no-cache'
-            });
-
-            if (!response.ok) {
-                console.warn('Background fetch failed:', item.url, response.status);
-                continue;
-            }
-
-            const blob = await response.blob();
-            const blobUrl = URL.createObjectURL(blob);
-            chrome.downloads.download({
-                url: blobUrl,
-                filename: item.downFileName || item.filename || undefined,
-                saveAs: item.saveAs || false
-            });
-        } catch (e) {
-            console.warn('Background download error:', item.url, e.message);
-        }
+        chrome.downloads.download({
+            url: item.url,
+            filename: item.downFileName || item.filename || undefined,
+            saveAs: item.saveAs || false
+        });
     }
 }
 
