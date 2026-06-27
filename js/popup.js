@@ -989,7 +989,7 @@ function isPlay(data) {
     return isMediaExt(data.ext) || typeArray.includes(data.type) || isM3U8(data);
 }
 
-// 猫抓下载器 — 通过 offscreen 引擎后台无感下载
+// 猫抓下载器
 let catDownloadIsProcessing = false;
 function catDownload(data, extra = {}) {
     if (catDownloadIsProcessing) {
@@ -998,6 +998,13 @@ function catDownload(data, extra = {}) {
     }
     catDownloadIsProcessing = true;
     if (!Array.isArray(data)) { data = [data]; }
+
+    // 在线合并（ffmpeg）需要 downloader.html 的完整界面，不走 offscreen
+    if (extra.ffmpeg) {
+        catDownloadIsProcessing = false;
+        openDownloaderTab(data, extra);
+        return;
+    }
 
     // 大于2G 询问是否使用流式下载
     if (!extra.ffmpeg && !G.downStream && Math.max(...data.map(item => item._size)) > G.chromeLimitSize && confirm(i18n("fileTooLargeStream", ["2G"]))) {
@@ -1015,6 +1022,19 @@ function catDownload(data, extra = {}) {
         if (chrome.runtime.lastError || !response) {
             Tips(i18n.downloadError || "Download error", 1500);
         }
+    });
+}
+
+function openDownloaderTab(data, extra = {}) {
+    chrome.tabs.get(G.tabId, function (tab) {
+        chrome.tabs.create({
+            url: `/downloader.html?${new URLSearchParams({
+                requestId: data.map(item => item.requestId).join(","),
+                ...extra
+            })}`,
+            index: tab.index + 1,
+            active: !G.downActive
+        });
     });
 }
 
