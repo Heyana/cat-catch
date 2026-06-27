@@ -1030,10 +1030,11 @@ function openDownloaderTab(data, extra = {}) {
         chrome.tabs.create({
             url: `/downloader.html?${new URLSearchParams({
                 requestId: data.map(item => item.requestId).join(","),
+                autoClose: 1,   // 合并完成后自动关闭，用户无感知
                 ...extra
             })}`,
             index: tab.index + 1,
-            active: !G.downActive
+            active: false       // 后台打开，不抢焦点
         });
     });
 }
