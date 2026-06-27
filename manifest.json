@@ -33,6 +33,7 @@
     "declarativeNetRequest",
     "scripting",
     "sidePanel",
+    "offscreen",
     "contextMenus"
   ],
   "commands": {

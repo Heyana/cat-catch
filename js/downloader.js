@@ -10,8 +10,7 @@ const _taskId = Date.parse(new Date()); // 配合ffmpeg使用的任务ID 以便�
 let _tabId = null;  // 当前页面tab id
 let _index = null;  // 当前页面 tab index
 
-// 是否表单提交下载 表单提交 不使用自定义文件名
-const downloadData = localStorage.getItem('downloadData') ? JSON.parse(localStorage.getItem('downloadData')) : [];
+// 下载数据通过 URL JSON 参数或后台 getData 消息获取（无需 localStorage）
 
 let iframeFFmpeg = null; // iframe FFmpeg窗口对象
 let iframeFFmpegReady = false; // iframe FFmpeg是否准备就绪
@@ -55,19 +54,7 @@ awaitG(() => {
             return;
         }
 
-        // 优先从downloadData 提取任务数据
-        for (let item of downloadData) {
-            if (_requestId.includes(item.requestId)) {
-                _data.push(item);
-                _requestId.splice(_requestId.indexOf(item.requestId), 1);
-            }
-        }
-        if (!_requestId.length) {
-            setHeaders(_data, start(), _tabId);
-            return;
-        }
-
-        // downloadData 不存在 从后台获取数据
+        // 从后台获取数据（通过 requestId 查缓存）
         chrome.runtime.sendMessage({ Message: "getData", requestId: _requestId }, function (data) {
             if (data == "error" || !Array.isArray(data) || chrome.runtime.lastError || data.length == 0) {
                 alert(i18n.dataFetchFailed);
@@ -324,10 +311,6 @@ function start() {
                     const url = new URL(location.href);
                     url.searchParams.set("requestId", down.fragments.map(item => item.requestId).join(","));
                     history.replaceState(null, null, url);
-
-                    // 数据储存到localStorage
-                    downloadData.push(fragment);
-                    localStorage.setItem('downloadData', JSON.stringify(downloadData));
 
                     // 正在运行的下载任务小于线程数 则开始下载
                     if (down.running < down.thread) {

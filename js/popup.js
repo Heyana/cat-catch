@@ -554,7 +554,17 @@ $('#DownFile').click(function () {
             continue;
         }
         if (G.m3u8AutoDown && data.parsing == "m3u8") {
-            openParser(data, { autoDown: true, autoClose: true });
+            // 通过 offscreen 引擎后台解析下载，无需跳转页面
+            chrome.runtime.sendMessage(chrome.runtime.id, {
+                Message: "offscreen-m3u8",
+                data: {
+                    url: data.url,
+                    title: data.title,
+                    filename: data.downFileName,
+                    tabid: data.tabId == -1 ? G.tabId : data.tabId,
+                    requestHeaders: data.requestHeaders || {}
+                }
+            });
             continue;
         }
         // 以防止popup页面被关闭 丢失下载数据 批量下载前临时修改为 后台下载
@@ -979,57 +989,32 @@ function isPlay(data) {
     return isMediaExt(data.ext) || typeArray.includes(data.type) || isM3U8(data);
 }
 
-// 猫抓下载器
+// 猫抓下载器 — 通过 offscreen 引擎后台无感下载
 let catDownloadIsProcessing = false;
 function catDownload(data, extra = {}) {
-    // 防止连续多次提交
     if (catDownloadIsProcessing) {
-        setTimeout(() => {
-            catDownload(data, extra);
-        }, 233);
+        setTimeout(() => catDownload(data, extra), 233);
         return;
     }
     catDownloadIsProcessing = true;
     if (!Array.isArray(data)) { data = [data]; }
 
-    // 储存数据到临时变量 提高检索速度
-    localStorage.setItem('downloadData', JSON.stringify(data));
-
-    // 如果大于2G 询问是否使用流式下载
+    // 大于2G 询问是否使用流式下载
     if (!extra.ffmpeg && !G.downStream && Math.max(...data.map(item => item._size)) > G.chromeLimitSize && confirm(i18n("fileTooLargeStream", ["2G"]))) {
         extra.downStream = 1;
     }
-    // 发送消息给下载器
-    chrome.runtime.sendMessage(chrome.runtime.id, { Message: "catDownload", data: data }, (message) => {
-        // 不存在下载器或者下载器出错 新建一个下载器
-        if (chrome.runtime.lastError || !message || message.message != "OK") {
-            createCatDownload(data, extra);
-            return;
-        }
+
+    // 通过 background → offscreen 引擎下载，无需跳转页面
+    chrome.runtime.sendMessage(chrome.runtime.id, {
+        Message: "offscreen-download",
+        type: "direct",
+        data: data,
+        extra: extra
+    }, (response) => {
         catDownloadIsProcessing = false;
-    });
-}
-function createCatDownload(data, extra) {
-    chrome.tabs.get(G.tabId, function (tab) {
-        const arg = {
-            url: `/downloader.html?${new URLSearchParams({
-                requestId: data.map(item => item.requestId).join(","),
-                ...extra
-            })}`,
-            index: tab.index + 1,
-            active: !G.downActive
-        };
-        chrome.tabs.create(arg, (tab) => {
-            // 循环获取tab.id 的状态 准备就绪 重置任务状态
-            const interval = setInterval(() => {
-                chrome.tabs.get(tab.id, (tab) => {
-                    if (chrome.runtime.lastError || tab.status == "complete") {
-                        clearInterval(interval);
-                        catDownloadIsProcessing = false;
-                    }
-                });
-            });
-        });
+        if (chrome.runtime.lastError || !response) {
+            Tips(i18n.downloadError || "Download error", 1500);
+        }
     });
 }
 

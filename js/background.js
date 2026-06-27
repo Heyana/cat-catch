@@ -1,5 +1,69 @@
 importScripts("/js/function.js", "/js/templates.js", "/js/init.js");
 
+// ========== Offscreen 下载引擎管理 ==========
+// 替代 downloader.html 页面跳转，在隐藏上下文处理下载
+let offscreenReady = false;
+const offscreenQueue = [];
+
+async function ensureOffscreen() {
+    const hasDoc = await chrome.offscreen.hasDocument();
+    if (hasDoc) {
+        offscreenReady = true;
+        flushOffscreenQueue();
+        return;
+    }
+    await chrome.offscreen.createDocument({
+        url: 'offscreen-download.html',
+        reasons: ['DOM_PARSER'],
+        justification: 'Background media download processing'
+    });
+    offscreenReady = true;
+    flushOffscreenQueue();
+}
+
+function flushOffscreenQueue() {
+    while (offscreenQueue.length > 0) {
+        const msg = offscreenQueue.shift();
+        chrome.runtime.sendMessage(msg).catch(() => {
+            offscreenQueue.push(msg); // retry later
+        });
+    }
+}
+
+function sendToOffscreen(msg) {
+    if (offscreenReady) {
+        chrome.runtime.sendMessage(msg).catch(() => {
+            offscreenReady = false;
+            offscreenQueue.push(msg);
+            ensureOffscreen();
+        });
+    } else {
+        offscreenQueue.push(msg);
+        ensureOffscreen();
+    }
+}
+
+// 监听 offscreen 文档就绪 + 进度 + 错误
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+    if (msg.type === 'offscreen-ready') {
+        offscreenReady = true;
+        flushOffscreenQueue();
+        return;
+    }
+    if (msg.type === 'offscreen-progress') {
+        // 后续可广播给 popup
+        return;
+    }
+    if (msg.type === 'offscreen-error') {
+        console.warn('Offscreen download error:', msg.url, msg.status);
+        return;
+    }
+    // 不拦截其他消息
+    return;
+});
+
+// ========== 原有代码 ==========
+
 // Service Worker 5分钟后会强制终止扩展
 // https://bugs.chromium.org/p/chromium/issues/detail?id=1271154
 // https://stackoverflow.com/questions/66618136/persistent-service-worker-in-chrome-extension/70003493#70003493
@@ -541,6 +605,26 @@ chrome.runtime.onMessage.addListener(function (Message, sender, sendResponse) {
         sendResponse("ok");
         return true;
     }
+    // Offscreen 下载引擎 — 替代 downloader.html 页面跳转
+    if (Message.Message == "offscreen-download") {
+        sendToOffscreen({
+            action: "offscreen-download",
+            type: Message.type,
+            data: Message.data
+        });
+        sendResponse({ status: "ok" });
+        return true;
+    }
+    // M3U8 自动下载 — 通过 offscreen 引擎后台解析
+    if (Message.Message == "offscreen-m3u8") {
+        sendToOffscreen({
+            action: "offscreen-download",
+            type: "m3u8",
+            data: Message.data
+        });
+        sendResponse({ status: "ok" });
+        return true;
+    }
     if (Message.Message == "damnUrlHas") {
         sendResponse(G.damnUrlSet.has(Message.tabId));
         return true;
@@ -764,7 +848,11 @@ chrome.downloads.onChanged.addListener(function (item) {
     const errorList = ["SERVER_BAD_CONTENT", "SERVER_UNAUTHORIZED", "SERVER_FORBIDDEN", "SERVER_UNREACHABLE", "SERVER_CROSS_ORIGIN_REDIRECT", "SERVER_FAILED", "NETWORK_FAILED"];
     if (item.error && errorList.includes(item.error.current) && G.downDataImageSave) {
         const data = { requestHeaders: { referer: G.downDataImageSave.pageUrl }, requestId: G.tabId, url: G.downDataImageSave.srcUrl };
-        chrome.tabs.create({ url: `downloader.html?JSON=${JSON.stringify(data)}&autoClose=true`, active: false });
+        sendToOffscreen({
+            action: "offscreen-download",
+            type: "direct",
+            data: [data]
+        });
         delete G.downDataImageSave;
     }
 });
